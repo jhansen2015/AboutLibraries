@@ -1,19 +1,28 @@
 package com.mikepenz.aboutlibraries.plugin
 
+import com.android.build.gradle.api.ApplicationVariant
 import com.mikepenz.aboutlibraries.plugin.mapping.Library
 import com.mikepenz.aboutlibraries.plugin.mapping.License
 import groovy.xml.MarkupBuilder
 import org.gradle.api.DefaultTask
+import org.gradle.api.artifacts.Configuration
 import org.gradle.api.tasks.*
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+
 
 import java.nio.charset.StandardCharsets
 
 @CacheableTask
 public class AboutLibrariesTask extends DefaultTask {
+    private static final Logger LOGGER = LoggerFactory.getLogger(AboutLibrariesTask.class);
+
     @Internal
     Set<String> neededLicenses = new HashSet<String>()
 
     private File dependencies
+    private Configuration configuration
+
     @Internal
     private File combinedLibrariesOutputFile
     private File outputValuesFolder
@@ -43,14 +52,18 @@ public class AboutLibrariesTask extends DefaultTask {
         this.dependencies = dependencies
     }
 
+    @Input
+    public void setConfiguration(Configuration configuration) {
+        this.configuration = configuration
+    }
+
     def gatherDependencies(def project) {
         // ensure directories exist
         this.outputValuesFolder = getValuesFolder()
         this.outputRawFolder = getRawFolder()
         this.combinedLibrariesOutputFile = getCombinedLibrariesOutputFile()
 
-        def libraries = new AboutLibrariesProcessor().gatherDependencies(project)
-
+        def libraries = new AboutLibrariesProcessor().gatherDependencies(project, configuration)
         def printWriter = new PrintWriter(new OutputStreamWriter(combinedLibrariesOutputFile.newOutputStream(), StandardCharsets.UTF_8), true)
         def combinedLibrariesBuilder = new MarkupBuilder(printWriter)
         combinedLibrariesBuilder.mkp.xmlDeclaration(version: "1.0", encoding: "utf-8")
@@ -70,26 +83,33 @@ public class AboutLibrariesTask extends DefaultTask {
         processNeededLicenses()
     }
 
+    /**
+     * Looks inside the *.jar and tries to find a license file to include in the apk
+     */
     def tryToFindAndWriteLibrary(def licenseId) {
         try {
-            def resultFile = new File(outputRawFolder, "license_${licenseId}.txt")
-            if (!resultFile.exists()) {
-                def is = getClass().getResourceAsStream("/static/license_${licenseId}.txt")
-                if (is != null) {
-                    resultFile.append(is)
-                    is.close()
-                }
+            LOGGER.debug("--> Try load library with ID {}", licenseId)
+            def successfulXml = false
+            def resultFile = new File(outputValuesFolder, "license_${licenseId}_strings.xml")
+            resultFile.delete()
+            def is = getClass().getResourceAsStream("/values/license_${licenseId}_strings.xml")
+            if (is != null) {
+                resultFile.append(is)
+                is.close()
+                successfulXml = true
+            } else {
+                LOGGER.debug("--> File did not exist {}", getClass().getResource("values/license_${licenseId}_strings.xml"))
             }
 
-            resultFile = new File(outputValuesFolder, "license_${licenseId}_strings.xml")
-            if (!resultFile.exists()) {
-                def is = getClass().getResourceAsStream("/values/license_${licenseId}_strings.xml")
-                if (is != null) {
-                    resultFile.append(is)
-                    is.close()
-                    return true
-                }
+            resultFile = new File(outputRawFolder, "license_${licenseId}.txt")
+            resultFile.delete()
+            is = getClass().getResourceAsStream("/static/license_${licenseId}.txt")
+            if (is != null) {
+                resultFile.append(is)
+                is.close()
             }
+
+            return successfulXml
         } catch (Exception ex) {
             println("--> License not available: ${licenseId}")
         }
@@ -116,9 +136,9 @@ public class AboutLibrariesTask extends DefaultTask {
                         licenseBuilder.mkp.xmlDeclaration(version: "1.0", encoding: "utf-8")
                         licenseBuilder.doubleQuotes = true
                         licenseBuilder.resources {
-                            string name: "define_license_${licenseId}", ""
-                            string name: "license_${licenseId}_licenseName", "${enumLicense.fullName}"
-                            string name: "license_${licenseId}_licenseWebsite", "${enumLicense.getUrl()}"
+                            string name: "define_license_${licenseId}", translatable: 'false', ""
+                            string name: "license_${licenseId}_licenseName", translatable: 'false', "${enumLicense.fullName}"
+                            string name: "license_${licenseId}_licenseWebsite", translatable: 'false', "${enumLicense.getUrl()}"
                         }
                         printWriter.close()
                     }
@@ -135,8 +155,10 @@ public class AboutLibrariesTask extends DefaultTask {
         }
     }
 
+    /**
+     * Writes out the given library to disk
+     */
     def writeDependency(MarkupBuilder resources, Library library) {
-
         def delimiter = ""
         def customProperties = ""
         if (isNotEmpty(library.libraryOwner)) {
@@ -148,37 +170,37 @@ public class AboutLibrariesTask extends DefaultTask {
             delimiter = ";"
         }
 
-        resources.string name: "define_plu_${library.uniqueId}", "${customProperties}"
+        resources.string name: "define_plu_${library.uniqueId}", translatable: 'false', "${customProperties}"
         if (isNotEmpty(library.author)) {
-            resources.string name: "library_${library.uniqueId}_author", "${library.author}"
+            resources.string name: "library_${library.uniqueId}_author", translatable: 'false', "${library.author}"
         }
         if (isNotEmpty(library.authorWebsite)) {
-            resources.string name: "library_${library.uniqueId}_authorWebsite", "${library.authorWebsite}"
+            resources.string name: "library_${library.uniqueId}_authorWebsite", translatable: 'false', "${library.authorWebsite}"
         }
-        resources.string name: "library_${library.uniqueId}_libraryName", "${library.libraryName}"
-        resources.string(name: "library_${library.uniqueId}_libraryDescription") {
+        resources.string name: "library_${library.uniqueId}_libraryName", translatable: 'false', "${library.libraryName}"
+        resources.string(name: "library_${library.uniqueId}_libraryDescription", translatable: 'false') {
             mkp.yieldUnescaped("<![CDATA[${library.libraryDescription}]]>")
         }
-        resources.string name: "library_${library.uniqueId}_libraryVersion", "${library.libraryVersion}"
-        resources.string name: "library_${library.uniqueId}_libraryArtifactId", "${library.artifactId}"
+        resources.string name: "library_${library.uniqueId}_libraryVersion", translatable: 'false', "${library.libraryVersion}"
+        resources.string name: "library_${library.uniqueId}_libraryArtifactId", translatable: 'false', "${library.artifactId}"
         // the maven artifactId
         if (isNotEmpty(library.libraryWebsite)) {
-            resources.string name: "library_${library.uniqueId}_libraryWebsite", "${library.libraryWebsite}"
+            resources.string name: "library_${library.uniqueId}_libraryWebsite", translatable: 'false', "${library.libraryWebsite}"
         }
         if (isNotEmpty(library.licenseId)) {
-            resources.string name: "library_${library.uniqueId}_licenseId", "${library.licenseId}"
+            resources.string name: "library_${library.uniqueId}_licenseId", translatable: 'false', "${library.licenseId}"
         }
         if (library.isOpenSource) {
-            resources.string name: "library_${library.uniqueId}_isOpenSource", "${library.isOpenSource}"
+            resources.string name: "library_${library.uniqueId}_isOpenSource", translatable: 'false', "${library.isOpenSource}"
         }
         if (isNotEmpty(library.repositoryLink)) {
-            resources.string name: "library_${library.uniqueId}_repositoryLink", "${library.repositoryLink}"
+            resources.string name: "library_${library.uniqueId}_repositoryLink", translatable: 'false', "${library.repositoryLink}"
         }
         if (isNotEmpty(library.libraryOwner)) {
-            resources.string name: "library_${library.uniqueId}_owner", "${library.libraryOwner}"
+            resources.string name: "library_${library.uniqueId}_owner", translatable: 'false', "${library.libraryOwner}"
         }
         if (isNotEmpty(library.licenseYear)) {
-            resources.string name: "library_${library.uniqueId}_year", "${library.licenseYear}"
+            resources.string name: "library_${library.uniqueId}_year", translatable: 'false', "${library.licenseYear}"
         }
     }
 
