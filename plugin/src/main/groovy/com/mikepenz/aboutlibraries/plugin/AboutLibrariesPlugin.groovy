@@ -34,12 +34,16 @@ class AboutLibrariesPlugin implements Plugin<Project> {
                 }
         }
 
-        final def exportLibraries = project.tasks.register("exportLibraries") { task ->
+        final def exportLibraries = project.tasks.register("exportLibraries") {
             description = "Calls exportLibraries for each variant"
         }
 
-        final def findLibraries = project.tasks.register("findLibraries") { task ->
+        final def findLibraries = project.tasks.register("findLibraries") {
             description = "Calls findLibraries for each variant"
+        }
+
+        final def generateLibraryDefinitions = project.tasks.register("generateLibraryDefinitions") {
+            description = "Calls generateLibraryDefinitions for each variant"
         }
 
         project.android.applicationVariants.all { final variant ->
@@ -47,40 +51,43 @@ class AboutLibrariesPlugin implements Plugin<Project> {
             final Configuration configuration = variant.runtimeConfiguration
             LOGGER.debug "variant name: ${variant.name}, config name: ${configuration.name}"
 
-            final AboutLibrariesTask generateTask = project.tasks.create(
-                    [name: "generateLibraryDefinitions${variant.name.capitalize()}", type: AboutLibrariesTask],
-                    { task ->
-                        description = "Writes the relevant metadata for the AboutLibraries plugin to display dependencies for variant ${variant.name}"
-                        dependencies = Paths.get("${outputFile}", variant.name, "res").toFile()
-                        task.configuration = configuration
-                    }
-            )
+            final AboutLibrariesTask generateLibrariesTask = project.tasks.create("generateLibraryDefinitions${variant.name.capitalize()}", AboutLibrariesTask) {
+                task ->
+                    description = "Writes the relevant metadata for the AboutLibraries plugin to display dependencies for variant ${variant.name}"
+                    dependencies = Paths.get("${outputFile}", variant.name, "res").toFile()
+                    task.configuration = configuration
+            }
+            generateLibraryDefinitions.configure() {
+                dependsOn(generateLibrariesTask)
+            }
 
             // This is necessary for backwards compatibility with versions of gradle that do not support
             // this new API.
             if (variant.hasProperty("preBuildProvider")) {
-                variant.preBuildProvider.configure { dependsOn(generateTask) }
+                variant.preBuildProvider.configure { dependsOn(generateLibrariesTask) }
             }
             else {
                 //noinspection GrDeprecatedAPIUsage
-                variant.preBuild.dependsOn(generateTask)
+                variant.preBuild.dependsOn(generateLibrariesTask)
             }
 
             // This is necessary for backwards compatibility with versions of gradle that do not support
             // this new API.
             if (variant.respondsTo("registerGeneratedResFolders")) {
-                generateTask.ext.generatedResFolders = project.files(generateTask.getDependencies()).builtBy(generateTask)
-                variant.registerGeneratedResFolders(generateTask.generatedResFolders)
+                generateLibrariesTask.ext.generatedResFolders = project.files(generateLibrariesTask.getDependencies()).builtBy(generateLibrariesTask)
+                variant.registerGeneratedResFolders(generateLibrariesTask.generatedResFolders)
 
                 if (variant.hasProperty("mergeResourcesProvider")) {
-                    variant.mergeResourcesProvider.configure { dependsOn(generateTask) }
-                } else {
-                    //noinspection GrDeprecatedAPIUsage
-                    variant.mergeResources.dependsOn(generateTask)
+                    variant.mergeResourcesProvider.configure { dependsOn(generateLibrariesTask) }
                 }
-            } else {
+                else {
+                    //noinspection GrDeprecatedAPIUsage
+                    variant.mergeResources.dependsOn(generateLibrariesTask)
+                }
+            }
+            else {
                 //noinspection GrDeprecatedAPIUsage
-                variant.registerResGeneratingTask(generateTask, generateTask.getDependencies())
+                variant.registerResGeneratingTask(generateLibrariesTask, generateLibrariesTask.getDependencies())
             }
 
             final def exportLibrariesTask = project.tasks.register("exportLibraries${variant.name.capitalize()}", AboutLibrariesExportTask) {
