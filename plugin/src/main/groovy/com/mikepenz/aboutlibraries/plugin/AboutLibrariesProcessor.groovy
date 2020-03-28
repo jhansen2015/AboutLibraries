@@ -10,14 +10,13 @@ import org.gradle.api.artifacts.result.ArtifactResult
 import org.gradle.api.artifacts.result.ComponentArtifactsResult
 import org.gradle.api.artifacts.result.ResolvedArtifactResult
 import org.gradle.api.internal.artifacts.DefaultModuleVersionIdentifier
-import org.gradle.internal.component.external.model.DefaultModuleComponentIdentifier
 import org.gradle.maven.MavenModule
 import org.gradle.maven.MavenPomArtifact
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
 class AboutLibrariesProcessor {
-    private static final Logger LOGGER = LoggerFactory.getLogger(AboutLibrariesProcessor.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(AboutLibrariesProcessor.class)
 
     private File configFolder
 
@@ -59,14 +58,14 @@ class AboutLibrariesProcessor {
         collectMappingDetails(customEnchantMapping, 'custom_enchant_mapping.prop')
     }
 
-    def gatherDependencies(def project) {
+    def gatherDependencies(def project, configuration) {
         def extension = project.extensions.aboutLibraries
         if (extension.configPath != null) {
             configFolder = new File(extension.configPath)
         }
 
         // get all dependencies
-        Map<String, HashSet<String>> collectedDependencies = new DependencyCollector().collect(project)
+        Set<ModuleVersionIdentifier> collectedDependencies = new DependencyCollector().collect(configuration)
 
         println "All dependencies.size=${collectedDependencies.size()}"
         if (collectedDependencies.size() > 0) {
@@ -75,13 +74,13 @@ class AboutLibrariesProcessor {
 
         def librariesList = new ArrayList<Library>()
         for (dependency in collectedDependencies) {
-            def group_artifact = dependency.getKey().split(":")
-            def version = dependency.getValue().first()
-
-            ModuleVersionIdentifier versionIdentifier = DefaultModuleVersionIdentifier.newId(group_artifact[0], group_artifact[1], version)
-            File file = resolvePomFile(project, group_artifact, versionIdentifier, false)
+            LOGGER.debug("Processing artifact ${dependency}")
+            File file = resolvePomFile(project, dependency, false)
             if (file != null) {
                 writeDependency(project, librariesList, file)
+            }
+            else {
+                LOGGER.warn("No artifact file found for {}", dependency)
             }
         }
         return librariesList
@@ -111,7 +110,7 @@ class AboutLibrariesProcessor {
         handledLibraries.add(uniqueId)
 
         // we also want to check if there are parent POMs with additional information
-        def parentPomFile = resolvePomFile(project, uniqueId, getParentFromPom(artifactPom), true)
+        def parentPomFile = resolvePomFile(project, getParentFromPom(artifactPom), true)
         def parentPom = null
         if (parentPomFile != null) {
             def parentPomText = parentPomFile.getText('UTF-8')
@@ -426,14 +425,14 @@ class AboutLibrariesProcessor {
      *
      * Logic based on: https://github.com/ben-manes/gradle-versions-plugin
      */
-    File resolvePomFile(project, uniqueId, ModuleVersionIdentifier id, parent) {
+    File resolvePomFile(project, ModuleVersionIdentifier id, parent) {
         try {
             if (id == null) {
                 return null
             }
-            LOGGER.debug("Attempting to resolve POM file for uniqueId={}, ModuleVersionIdentifier id={}", uniqueId, id);
+            LOGGER.debug("Attempting to resolve POM file for ModuleVersionIdentifier id={}", id);
             ArtifactResolutionResult resolutionResult = project.dependencies.createArtifactResolutionQuery()
-                    .forComponents(DefaultModuleComponentIdentifier.newId(id))
+                    .forModule(id.group, id.name, id.version)
                     .withArtifacts(MavenModule, MavenPomArtifact)
                     .execute()
 
@@ -446,7 +445,7 @@ class AboutLibrariesProcessor {
                     // todo identify if that ever has more than 1
                     if (artifact instanceof ResolvedArtifactResult) {
                         if (parent) {
-                            println "--> Retrieved POM for: ${uniqueId} from ${id.group}:${id.name}:${id.version}"
+                            println "--> Retrieved POM for: ${id.group}:${id.module}:${id.version}"
                         }
                         return ((ResolvedArtifactResult) artifact).file
                     }

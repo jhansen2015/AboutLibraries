@@ -15,68 +15,38 @@
  */
 package com.mikepenz.aboutlibraries.plugin
 
-import org.gradle.api.Project
 import org.gradle.api.artifacts.Configuration
-import org.gradle.api.artifacts.component.ModuleComponentIdentifier
-import org.gradle.api.tasks.diagnostics.internal.graph.nodes.RenderableDependency
-import org.gradle.api.tasks.diagnostics.internal.graph.nodes.RenderableModuleResult
-import org.gradle.internal.deprecation.DeprecatableConfiguration
+import org.gradle.api.artifacts.ModuleVersionIdentifier
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import java.util.*
 
 /**
  * Based on https://raw.githubusercontent.com/gradle/gradle/master/subprojects/diagnostics/src/main/java/org/gradle/api/reporting/dependencies/internal/JsonProjectDependencyRenderer.java
  */
 class DependencyCollector {
+    private val LOGGER: Logger = LoggerFactory.getLogger(DependencyCollector::class.java)
+
     /**
      * Generates the project dependency report structure
      *
-     * @param project the project for which the report must be generated
-     * @return the generated JSON, as a String
+     * @return set of artifact ModuleVersionIdentifier instances for the configuration sorted alphabetically by <code>group:name:version</code>
      */
-    fun collect(project: Project): Map<String, HashSet<String>> {
-        return createConfigurations(project)
+    fun collect(configuration: Configuration): Set<ModuleVersionIdentifier> {
+        // Sort before handing back to Java/Groovy space
+        return createConfigurations(configuration).sortedBy { it.group + ":" + it.name + ":" + it.version }.toSet()
     }
 
-    private fun createConfigurations(project: Project): Map<String, HashSet<String>> {
-        val collected: MutableMap<String, HashSet<String>> = HashMap()
-        val configurations: Iterable<Configuration> = getNonDeprecatedConfigurations(project)
-        for (configuration in configurations) {
-            if (canBeResolved(configuration)) {
-                if (!configuration.name.contains("classpath", true)) {
-                    // we are not specially concerned about special entries
-                    continue
-                } else if (configuration.name.contains("compiler", true)) {
-                    // we are not keen to include compiler entries
-                    continue
-                }
-
-                val result = configuration.incoming.resolutionResult
-                val root: RenderableDependency = RenderableModuleResult(result.root)
-                for (childDependency in root.children) {
-                    if (childDependency.id is ModuleComponentIdentifier) {
-                        val id = childDependency.id as ModuleComponentIdentifier
-                        val versions = collected.getOrDefault(id.group + ":" + id.module, HashSet())
-                        versions.add(id.version)
-                        collected[id.group + ":" + id.module] = versions
-                    }
-                }
+    private fun createConfigurations(configuration: Configuration): Set<ModuleVersionIdentifier> {
+        val moduleIds: MutableSet<ModuleVersionIdentifier> = HashSet()
+        for (dependency in configuration.allDependencies) {
+            configuration.resolvedConfiguration.resolvedArtifacts.forEach { artifact ->
+                val artifactId = artifact.moduleVersion.id
+                moduleIds.add(artifactId)
+                LOGGER.debug("Adding artifact for config name '{}' module '{}' (location '{}')", configuration.name, artifactId, artifact.file)
             }
         }
-        return collected
+        return moduleIds
     }
 
-    private fun getNonDeprecatedConfigurations(project: Project): List<Configuration> {
-        val filteredConfigurations: MutableList<Configuration> = ArrayList()
-        for (configuration in project.configurations) {
-            if (!(configuration as DeprecatableConfiguration).isFullyDeprecated) {
-                filteredConfigurations.add(configuration)
-            }
-        }
-        return filteredConfigurations
-    }
-
-    private fun canBeResolved(configuration: Configuration): Boolean {
-        val isDeprecatedForResolving = (configuration as DeprecatableConfiguration).resolutionAlternatives != null
-        return configuration.isCanBeResolved() && !isDeprecatedForResolving
-    }
 }

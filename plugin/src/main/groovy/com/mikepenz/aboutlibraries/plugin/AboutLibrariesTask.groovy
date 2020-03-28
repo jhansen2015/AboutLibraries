@@ -1,12 +1,15 @@
 package com.mikepenz.aboutlibraries.plugin
 
+import com.android.build.gradle.api.ApplicationVariant
 import com.mikepenz.aboutlibraries.plugin.mapping.Library
 import com.mikepenz.aboutlibraries.plugin.mapping.License
 import groovy.xml.MarkupBuilder
 import org.gradle.api.DefaultTask
+import org.gradle.api.artifacts.Configuration
 import org.gradle.api.tasks.*
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+
 
 import java.nio.charset.StandardCharsets
 
@@ -18,6 +21,8 @@ public class AboutLibrariesTask extends DefaultTask {
     Set<String> neededLicenses = new HashSet<String>()
 
     private File dependencies
+    private Configuration configuration
+
     @Internal
     private File combinedLibrariesOutputFile
     private File outputValuesFolder
@@ -47,13 +52,18 @@ public class AboutLibrariesTask extends DefaultTask {
         this.dependencies = dependencies
     }
 
+    @Input
+    public void setConfiguration(Configuration configuration) {
+        this.configuration = configuration
+    }
+
     def gatherDependencies(def project) {
         // ensure directories exist
         this.outputValuesFolder = getValuesFolder()
         this.outputRawFolder = getRawFolder()
         this.combinedLibrariesOutputFile = getCombinedLibrariesOutputFile()
 
-        def libraries = new AboutLibrariesProcessor().gatherDependencies(project)
+        def libraries = new AboutLibrariesProcessor().gatherDependencies(project, configuration)
 
         def printWriter = new PrintWriter(new OutputStreamWriter(combinedLibrariesOutputFile.newOutputStream(), StandardCharsets.UTF_8), true)
         def combinedLibrariesBuilder = new MarkupBuilder(printWriter)
