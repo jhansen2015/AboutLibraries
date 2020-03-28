@@ -2,7 +2,6 @@ package com.mikepenz.aboutlibraries.plugin
 
 import org.gradle.api.Plugin
 import org.gradle.api.Project
-import org.gradle.api.Task
 import org.gradle.api.artifacts.Configuration
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -24,25 +23,24 @@ class AboutLibrariesPlugin implements Plugin<Project> {
 
         final File outputFile = Paths.get("${project.buildDir}", "generated", "aboutlibraries").toFile()
 
-        // TODO: Replace with register?
-        // https://docs.gradle.org/current/userguide/lazy_configuration.html#working_with_task_dependencies_in_lazy_properties
-        
-        final def cleanupTask = project.tasks.create(
-                [ name: "aboutLibrariesClean", action: { outputFile.deleteDir() } ],
-                { task ->
-                    description = "Cleans the generated data from the AboutLibraries plugin"
-                    outputs.upToDateWhen { ! outputFile.exists() }
+        final def clean = project.tasks.named("clean")
+        project.tasks.register("aboutLibrariesClean") {
+            task ->
+                description = "Cleans the generated data from the AboutLibraries plugin"
+                clean.get().dependsOn(task)
+                task.outputs.upToDateWhen {!outputFile.exists()}
+                doLast {
+                    outputFile.deleteDir()
                 }
-        )
-        project.tasks.findByName("clean").dependsOn(cleanupTask)
+        }
 
-        final def exportLibraries = project.tasks.create("exportLibraries", { task ->
+        final def exportLibraries = project.tasks.register("exportLibraries") { task ->
             description = "Calls exportLibraries for each variant"
-        })
+        }
 
-        final def findLibraries = project.tasks.create("findLibraries", { task ->
+        final def findLibraries = project.tasks.register("findLibraries") { task ->
             description = "Calls findLibraries for each variant"
-        })
+        }
 
         project.android.applicationVariants.all { final variant ->
 
@@ -85,23 +83,23 @@ class AboutLibrariesPlugin implements Plugin<Project> {
                 variant.registerResGeneratingTask(generateTask, generateTask.getDependencies())
             }
 
-            final AboutLibrariesExportTask exportLibrariesTask = project.tasks.create(
-                    [name: "exportLibraries${variant.name.capitalize()}", type: AboutLibrariesExportTask],
-                    { task ->
-                        description = "Writes all libraries for variant ${variant.name} and their licenses in CSV format to the CLI"
-                        task.configuration = configuration
-                    }
-            )
-            exportLibraries.dependsOn(exportLibrariesTask)
+            final def exportLibrariesTask = project.tasks.register("exportLibraries${variant.name.capitalize()}", AboutLibrariesExportTask) {
+                task ->
+                    description = "Writes all libraries for variant ${variant.name} and their licenses in CSV format to the CLI"
+                    task.configuration = configuration
+            }
+            exportLibraries.configure() {
+                dependsOn(exportLibrariesTask)
+            }
 
-            final AboutLibrariesIdTask findLibrariesTask = project.tasks.create(
-                    [name: "findLibraries${variant.name.capitalize()}", type: AboutLibrariesIdTask],
-                    { task ->
-                        description = "Writes the relevant meta data for variant ${variant.name} for the AboutLibraries plugin to display dependencies"
-                        task.configuration = configuration
-                    }
-            )
-            findLibraries.dependsOn(findLibrariesTask)
+            final def findLibrariesTask = project.tasks.register("findLibraries${variant.name.capitalize()}", AboutLibrariesIdTask) {
+                task ->
+                    description = "Writes the relevant meta data for variant ${variant.name} for the AboutLibraries plugin to display dependencies"
+                    task.configuration = configuration
+            }
+            findLibraries.configure() {
+                dependsOn(findLibrariesTask)
+            }
 
         }
 
