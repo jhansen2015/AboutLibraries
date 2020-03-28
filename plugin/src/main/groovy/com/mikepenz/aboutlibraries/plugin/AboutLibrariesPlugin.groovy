@@ -24,21 +24,23 @@ class AboutLibrariesPlugin implements Plugin<Project> {
 
         final File outputFile = Paths.get("${project.buildDir}", "generated", "aboutlibraries").toFile()
 
-        final def cleanupTask = project.task(
-                [type: AboutLibrariesCleanTask],
-                "aboutLibrariesClean",
+        // TODO: Replace with register?
+        // https://docs.gradle.org/current/userguide/lazy_configuration.html#working_with_task_dependencies_in_lazy_properties
+        
+        final def cleanupTask = project.tasks.create(
+                [ name: "aboutLibrariesClean", action: { outputFile.deleteDir() } ],
                 { task ->
                     description = "Cleans the generated data from the AboutLibraries plugin"
-                    dependencies = outputFile
+                    outputs.upToDateWhen { ! outputFile.exists() }
                 }
         )
         project.tasks.findByName("clean").dependsOn(cleanupTask)
 
-        final def exportLibraries = project.task("exportLibraries", { task ->
+        final def exportLibraries = project.tasks.create("exportLibraries", { task ->
             description = "Calls exportLibraries for each variant"
         })
 
-        final def findLibraries = project.task("findLibraries", { task ->
+        final def findLibraries = project.tasks.create("findLibraries", { task ->
             description = "Calls findLibraries for each variant"
         })
 
