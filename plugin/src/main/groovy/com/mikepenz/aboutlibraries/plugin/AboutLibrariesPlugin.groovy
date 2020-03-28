@@ -23,15 +23,15 @@ class AboutLibrariesPlugin implements Plugin<Project> {
 
         final File outputFile = Paths.get("${project.buildDir}", "generated", "aboutlibraries").toFile()
 
-        final def clean = project.tasks.named("clean")
-        project.tasks.register("aboutLibrariesClean") {
-            task ->
-                description = "Cleans the generated data from the AboutLibraries plugin"
-                clean.get().dependsOn(task)
-                task.outputs.upToDateWhen {!outputFile.exists()}
-                doLast {
-                    outputFile.deleteDir()
-                }
+        final def aboutLibrariesClean = project.tasks.register("aboutLibrariesClean") {
+            description = "Cleans the generated data from the AboutLibraries plugin"
+            outputs.upToDateWhen { !outputFile.exists() }
+            doLast {
+                outputFile.deleteDir()
+            }
+        }
+        project.tasks.named("clean").configure() {
+            dependsOn(aboutLibrariesClean)
         }
 
         final def exportLibraries = project.tasks.register("exportLibraries") {
@@ -48,14 +48,13 @@ class AboutLibrariesPlugin implements Plugin<Project> {
 
         project.android.applicationVariants.all { final variant ->
 
-            final Configuration configuration = variant.runtimeConfiguration
-            LOGGER.debug "variant name: ${variant.name}, config name: ${configuration.name}"
+            final Configuration config = variant.runtimeConfiguration
+            LOGGER.debug "variant name: ${variant.name}, config name: ${config.name}"
 
             final AboutLibrariesTask generateLibrariesTask = project.tasks.create("generateLibraryDefinitions${variant.name.capitalize()}", AboutLibrariesTask) {
-                task ->
-                    description = "Writes the relevant metadata for the AboutLibraries plugin to display dependencies for variant ${variant.name}"
-                    dependencies = Paths.get("${outputFile}", variant.name, "res").toFile()
-                    task.configuration = configuration
+                description = "Writes the relevant metadata for the AboutLibraries plugin to display dependencies for variant ${variant.name}"
+                dependencies = Paths.get("${outputFile}", variant.name, "res").toFile()
+                configuration = config
             }
             generateLibraryDefinitions.configure() {
                 dependsOn(generateLibrariesTask)
@@ -91,18 +90,16 @@ class AboutLibrariesPlugin implements Plugin<Project> {
             }
 
             final def exportLibrariesTask = project.tasks.register("exportLibraries${variant.name.capitalize()}", AboutLibrariesExportTask) {
-                task ->
-                    description = "Writes all libraries for variant ${variant.name} and their licenses in CSV format to the CLI"
-                    task.configuration = configuration
+                description = "Writes all libraries for variant ${variant.name} and their licenses in CSV format to the CLI"
+                configuration = config
             }
             exportLibraries.configure() {
                 dependsOn(exportLibrariesTask)
             }
 
             final def findLibrariesTask = project.tasks.register("findLibraries${variant.name.capitalize()}", AboutLibrariesIdTask) {
-                task ->
-                    description = "Writes the relevant meta data for variant ${variant.name} for the AboutLibraries plugin to display dependencies"
-                    task.configuration = configuration
+                description = "Writes the relevant meta data for variant ${variant.name} for the AboutLibraries plugin to display dependencies"
+                configuration = config
             }
             findLibraries.configure() {
                 dependsOn(findLibrariesTask)
