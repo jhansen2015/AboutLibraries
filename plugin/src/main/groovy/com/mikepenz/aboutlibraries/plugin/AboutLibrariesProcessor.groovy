@@ -1,15 +1,16 @@
 package com.mikepenz.aboutlibraries.plugin
 
-
 import com.mikepenz.aboutlibraries.plugin.mapping.Library
 import com.mikepenz.aboutlibraries.plugin.mapping.License
 import groovy.xml.XmlUtil
-import org.gradle.api.artifacts.ModuleVersionIdentifier
+import org.gradle.api.artifacts.ResolvedArtifact
+import org.gradle.api.artifacts.component.ComponentIdentifier
 import org.gradle.api.artifacts.result.ArtifactResolutionResult
 import org.gradle.api.artifacts.result.ArtifactResult
 import org.gradle.api.artifacts.result.ComponentArtifactsResult
 import org.gradle.api.artifacts.result.ResolvedArtifactResult
-import org.gradle.api.internal.artifacts.DefaultModuleVersionIdentifier
+import org.gradle.api.internal.artifacts.DefaultModuleIdentifier
+import org.gradle.internal.component.external.model.DefaultModuleComponentIdentifier
 import org.gradle.maven.MavenModule
 import org.gradle.maven.MavenPomArtifact
 import org.slf4j.Logger
@@ -65,7 +66,7 @@ class AboutLibrariesProcessor {
         }
 
         // get all dependencies
-        Set<ModuleVersionIdentifier> collectedDependencies = new DependencyCollector().collect(configuration)
+        Set<ResolvedArtifact> collectedDependencies = new DependencyCollector().collect(configuration)
 
         println "All dependencies.size=${collectedDependencies.size()}"
         if (collectedDependencies.size() > 0) {
@@ -75,8 +76,9 @@ class AboutLibrariesProcessor {
         def librariesList = new ArrayList<Library>()
         for (dependency in collectedDependencies) {
             LOGGER.debug("Processing artifact ${dependency}")
-            File file = resolvePomFile(project, dependency, false)
+            File file = resolvePomFile(project, dependency.id.componentIdentifier, false)
             if (file != null) {
+                // TODO: Rename as constructLibrary
                 writeDependency(project, librariesList, file)
             }
             else {
@@ -388,7 +390,7 @@ class AboutLibrariesProcessor {
      *
      * Logic based on: https://github.com/ben-manes/gradle-versions-plugin
      */
-    static ModuleVersionIdentifier getParentFromPom(pom) {
+    static ComponentIdentifier getParentFromPom(pom) {
         def parent = pom.children().find { child -> child.name() == 'parent' }
         if (parent) {
             if (LOGGER.isDebugEnabled()) {
@@ -398,7 +400,7 @@ class AboutLibrariesProcessor {
             String artifactId = parent.artifactId
             String version = parent.version
             if (groupId && artifactId && version) {
-                return DefaultModuleVersionIdentifier.newId(groupId, artifactId, version)
+                return new DefaultModuleComponentIdentifier(DefaultModuleIdentifier.newId(groupId, artifactId), version);
             }
         }
         return null
@@ -409,14 +411,14 @@ class AboutLibrariesProcessor {
      *
      * Logic based on: https://github.com/ben-manes/gradle-versions-plugin
      */
-    File resolvePomFile(project, ModuleVersionIdentifier id, parent) {
+    File resolvePomFile(project, ComponentIdentifier componentIdentifier, parent) {
         try {
-            if (id == null) {
+            if (null == componentIdentifier) {
                 return null
             }
-            LOGGER.debug("Attempting to resolve POM file for ModuleVersionIdentifier id={}", id);
+            LOGGER.debug("Attempting to resolve POM file for ComponentIdentifier id={}", componentIdentifier);
             ArtifactResolutionResult resolutionResult = project.dependencies.createArtifactResolutionQuery()
-                    .forModule(id.group, id.name, id.version)
+                    .forComponents(componentIdentifier)
                     .withArtifacts(MavenModule, MavenPomArtifact)
                     .execute()
 
@@ -429,7 +431,7 @@ class AboutLibrariesProcessor {
                     // todo identify if that ever has more than 1
                     if (artifact instanceof ResolvedArtifactResult) {
                         if (parent) {
-                            println "--> Retrieved POM for: ${id.group}:${id.module}:${id.version}"
+                            println "--> Retrieved POM for: ${componentIdentifier.displayName}"
                         }
                         return ((ResolvedArtifactResult) artifact).file
                     }

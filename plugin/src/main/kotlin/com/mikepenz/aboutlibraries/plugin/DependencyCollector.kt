@@ -16,7 +16,7 @@
 package com.mikepenz.aboutlibraries.plugin
 
 import org.gradle.api.artifacts.Configuration
-import org.gradle.api.artifacts.ModuleVersionIdentifier
+import org.gradle.api.artifacts.ResolvedArtifact
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.util.*
@@ -25,28 +25,30 @@ import java.util.*
  * Based on https://raw.githubusercontent.com/gradle/gradle/master/subprojects/diagnostics/src/main/java/org/gradle/api/reporting/dependencies/internal/JsonProjectDependencyRenderer.java
  */
 class DependencyCollector {
-    private val LOGGER: Logger = LoggerFactory.getLogger(DependencyCollector::class.java)
+    private val logger: Logger = LoggerFactory.getLogger(DependencyCollector::class.java)
 
     /**
      * Generates the project dependency report structure
      *
      * @return set of artifact ModuleVersionIdentifier instances for the configuration sorted alphabetically by <code>group:name:version</code>
      */
-    fun collect(configuration: Configuration): Set<ModuleVersionIdentifier> {
-        // Sort before handing back to Java/Groovy space
-        return createConfigurations(configuration).sortedBy { it.group + ":" + it.name + ":" + it.version }.toSet()
-    }
+    fun collect(configuration: Configuration): Set<ResolvedArtifact> {
 
-    private fun createConfigurations(configuration: Configuration): Set<ModuleVersionIdentifier> {
-        val moduleIds: MutableSet<ModuleVersionIdentifier> = HashSet()
-        for (dependency in configuration.allDependencies) {
-            configuration.resolvedConfiguration.resolvedArtifacts.forEach { artifact ->
-                val artifactId = artifact.moduleVersion.id
-                moduleIds.add(artifactId)
-                LOGGER.debug("Adding artifact for config name '{}' module '{}' (location '{}')", configuration.name, artifactId, artifact.file)
-            }
+        val moduleIds: MutableSet<ResolvedArtifact> = HashSet()
+
+        configuration.resolvedConfiguration.resolvedArtifacts.forEach { artifact ->
+            logger.debug(
+                    "Adding artifact for config name '{}' type '{}' moduleVersion.id '{}' (location '{}')",
+                    configuration.name,
+                    artifact.type,
+                    artifact.moduleVersion.id,
+                    artifact.file
+            )
+            moduleIds.add(artifact)
         }
-        return moduleIds
+
+        // Sort before handing back to Java/Groovy space
+        return moduleIds.sortedBy { it.name }.toSet()
     }
 
 }
