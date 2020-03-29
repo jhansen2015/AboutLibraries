@@ -76,19 +76,23 @@ class AboutLibrariesProcessor {
         def librariesList = new ArrayList<Library>()
         for (dependency in collectedDependencies) {
             LOGGER.debug("Processing artifact ${dependency}")
-            File file = resolvePomFile(project, dependency.id.componentIdentifier, false)
-            if (file != null) {
-                // TODO: Rename as constructLibrary
-                writeDependency(project, librariesList, file)
+            def library = constructLibraryRecord(project, dependency)
+
+            if( null != library ) {
+                LOGGER.debug("Adding library record: {}", library)
+                librariesList.add(library)
             }
             else {
-                LOGGER.warn("No artifact file found for {}", dependency)
+                LOGGER.warn("Failed to construct library record for {}", dependency)
             }
         }
         return librariesList
     }
 
-    def writeDependency(def project, List<Library> libraries, File artifactFile) {
+    def constructLibraryRecord(def project, def dependency) {
+
+        File artifactFile = resolvePomFile(project, dependency.id.componentIdentifier, false)
+
         def artifactPomText = artifactFile.getText('UTF-8')
         def artifactPom = new XmlSlurper(/* validating */ false, /* namespaceAware */ false).parseText(artifactPomText)
 
@@ -104,7 +108,8 @@ class AboutLibrariesProcessor {
         )
 
         // check if we shall skip this specific uniqueId
-        if (shouldSkip(uniqueId)) {
+        if (handledLibraries.contains(uniqueId)) {
+            println "Skipping ${dependency.id.componentIdentifier}"
             return
         }
 
@@ -228,6 +233,41 @@ class AboutLibrariesProcessor {
             return
         }
 
+// TODO: Convert to groovy, or, convert whole class to Kotlin.
+//        val licensesZip = ZipFile(artifact.file)
+////                JsonSlurper jsonSlurper = new JsonSlurper()
+//
+//        licensesZip.getEntry("third_party_licenses.json")?.let {
+//            val content = licensesZip.getInputStream(it).bufferedReader().use(BufferedReader::readText)
+//            println("third_party_licenses.json: [$content]")
+//        }
+//
+//        licensesZip.getEntry("META-INF/MANIFEST.MF")?.let { txtFile ->
+////                    val content = licensesZip.getInputStream(txtFile).bufferedReader().use(BufferedReader::readText)
+//
+//            Properties().apply {
+//                licensesZip.getInputStream(txtFile).use { load(it) }
+//
+//                load(licensesZip.getInputStream(txtFile))
+//                listOf(
+//                        "Bundle-Description",
+//                        "Bundle-License",
+//                        "Bundle-License",
+//                        "Bundle-Name",
+//                        "Bundle-SymbolicName",
+//                        "Bundle-Vendor",
+//                        "Bundle-Version",
+//                        "Implementation-Title",
+//                        "Implementation-Version",
+//                        "Implementation-Vendor"
+//                ).forEach {
+//                    if (containsKey(it)) {
+//                        println("Found [" + it + "]=[" + this[it] + "]")
+//                    }
+//                }
+//            }
+//        }
+
         def library = new Library(
                 uniqueId,
                 "${groupId}:${artifactPom.artifactId}:${libraryVersion}",
@@ -243,8 +283,7 @@ class AboutLibrariesProcessor {
                 libraryOwner,
                 licenseYear
         )
-        LOGGER.debug("Adding library: {}", library)
-        libraries.add(library)
+        return library
     }
 
     /**
@@ -286,17 +325,23 @@ class AboutLibrariesProcessor {
      * Ensures all characters necessary are escaped
      */
     static def fixString(Object value) {
+        def result = ""
         if (value != null) {
-            return value.toString()
+            final def source = value.toString()
+            result = source
                     .replace("\\", "")
                     .replace("\"", "\\\"")
                     .replace("'", "\\'")
                     .replace("&", "&amp;")
                     .replace("<", "&lt;")
                     .replace(">", "&gt;")
-        } else {
-            return ""
+
+            if( LOGGER.isDebugEnabled() && source != result ) {
+                LOGGER.debug("Fixed string from \n[{}]\n to \n[{}]", source, result)
+            }
         }
+
+        return result
     }
 
     /**
@@ -376,13 +421,6 @@ class AboutLibrariesProcessor {
      */
     static def isNotEmpty(String value) {
         return value != null && value != ""
-    }
-
-    /**
-     * Skip libraries which have a core dependency and we don't want it to show up more than necessary
-     */
-    def shouldSkip(String uniqueId) {
-        return handledLibraries.contains(uniqueId) || uniqueId == "com_mikepenz__aboutlibraries" || uniqueId == "com_mikepenz__aboutlibraries_definitions"
     }
 
     /**
