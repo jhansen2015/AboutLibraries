@@ -207,13 +207,14 @@ class AboutLibrariesTask extends DefaultTask {
                 // Skip isOpenSource attribute if it is false
             }
             else if( isNotEmpty(library[it]) ) {
+                def value = encodeForAndroidResourceValue(library[it])
                 if( cdataFields.contains(it) ) {
                     resources.string(name: "library_${library.uniqueId}_${it}", translatable: 'false') { inner ->
-                        mkp.yieldUnescaped("<![CDATA[${library[it]}]]>")
+                        mkp.yieldUnescaped("<![CDATA[${value}]]>")
                     }
                 }
                 else {
-                    resources.string name: "library_${library.uniqueId}_${it}", translatable: 'false', "${library[it]}"
+                    resources.string name: "library_${library.uniqueId}_${it}", translatable: 'false', "${value}"
                 }
             }
         }
@@ -289,6 +290,29 @@ class AboutLibrariesTask extends DefaultTask {
         return value != null && value.toString() != ""
     }
 
+    /**
+     * Ensures all characters necessary are escaped
+     */
+    static def encodeForAndroidResourceValue(Object value) {
+        def result = ""
+        if (value != null) {
+            final def source = value.toString()
+            result = source
+                    .replace("\\", "")
+                    .replace("\"", "\\\"")
+                    .replace("'", "\\'")
+                    .replace("&", "&amp;")
+                    .replace("<", "&lt;")
+                    .replace(">", "&gt;")
+
+            if( LOGGER.isDebugEnabled() && source != result ) {
+                LOGGER.debug("Fixed string from \n[{}]\n to \n[{}]", source, result)
+            }
+        }
+
+        return result
+    }
+    
     @TaskAction
     void action() throws IOException {
         gatherDependencies(project)

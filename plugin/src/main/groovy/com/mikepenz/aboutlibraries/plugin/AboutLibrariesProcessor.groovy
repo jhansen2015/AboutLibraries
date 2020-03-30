@@ -148,41 +148,41 @@ class AboutLibrariesProcessor {
         }
 
         // generate a unique ID for the library
-        def author = fixAuthor(fixString(fixXmlSlurperArray(artifactPom.developers.developer.name)))
+        def author = fixAuthor(nullAsEmptyString(fixXmlSlurperArray(artifactPom.developers.developer.name)))
         if (!isNotEmpty(author)) {
             // if no devs listed, use organisation
-            author = fixString(artifactPom.organization.name)
+            author = nullAsEmptyString(artifactPom.organization.name)
         }
         if (!isNotEmpty(author) && parentPom != null) { // fallback to parentPom if available
-            author = fixAuthor(fixString(fixXmlSlurperArray(parentPom.developers.developer.name)))
+            author = fixAuthor(nullAsEmptyString(fixXmlSlurperArray(parentPom.developers.developer.name)))
             if (!isNotEmpty(author)) {
                 // if no devs listed, use organisation
-                author = fixString(parentPom.organization.name)
+                author = nullAsEmptyString(parentPom.organization.name)
             }
             if (isNotEmpty(author)) {
                 println("----> Had to fallback to parent author for: ${uniqueId} -- result: ${author}")
             }
         }
         // get the author from the pom
-        def authorWebsite = fixString(fixXmlSlurperArray(artifactPom.developers.developer.organizationUrl))
+        def authorWebsite = nullAsEmptyString(fixXmlSlurperArray(artifactPom.developers.developer.organizationUrl))
         if (!isNotEmpty(authorWebsite)) {
             // if no devs listed, use organisation
-            authorWebsite = fixString(artifactPom.organization.url)
+            authorWebsite = nullAsEmptyString(artifactPom.organization.url)
         }
         if (!isNotEmpty(authorWebsite) && parentPom != null) { // fallback to parentPom if available
-            authorWebsite = fixAuthor(fixString(fixXmlSlurperArray(parentPom.developers.developer.organizationUrl)))
+            authorWebsite = fixAuthor(nullAsEmptyString(fixXmlSlurperArray(parentPom.developers.developer.organizationUrl)))
             if (!isNotEmpty(authorWebsite)) {
                 // if no devs listed, use organisation
-                authorWebsite = fixString(parentPom.organization.url)
+                authorWebsite = nullAsEmptyString(parentPom.organization.url)
             }
             if (isNotEmpty(authorWebsite)) {
                 println("----> Had to fallback to parent authorWebsite for: ${uniqueId} -- result: ${authorWebsite}")
             }
         }
         // get the url for the author
-        def libraryName = fixLibraryName(uniqueId, fixString(artifactPom.name))
+        def libraryName = fixLibraryName(uniqueId, nullAsEmptyString(artifactPom.name))
         // get name of the library
-        def libraryDescription = fixLibraryDescription(uniqueId, fixString(artifactPom.description))
+        def libraryDescription = fixLibraryDescription(uniqueId, nullAsEmptyString(artifactPom.description))
         if (enchantedDefinition != null) {
             // enchant the library by the description of the available definition file
             libraryDescription = ifEmptyElse(enchantedDefinition.string.find { it.@name.toString().endsWith("_libraryDescription") }.toString(), libraryDescription)
@@ -190,18 +190,18 @@ class AboutLibrariesProcessor {
         if (!isNotEmpty(libraryDescription) && parentPom != null) {
             // fallback to parentPom if available
             println("----> Had to fallback to parent description for: ${uniqueId}")
-            libraryDescription = fixLibraryDescription(uniqueId, fixString(parentPom.description))
+            libraryDescription = fixLibraryDescription(uniqueId, nullAsEmptyString(parentPom.description))
         }
         // get the description of the library
-        def libraryVersion = fixString(artifactPom.version) // get the version of the library
+        def libraryVersion = nullAsEmptyString(artifactPom.version) // get the version of the library
         if (!isNotEmpty(libraryVersion)) {
             // fallback to parent version if available
-            libraryVersion = fixString(artifactPom.parent.version)
+            libraryVersion = nullAsEmptyString(artifactPom.parent.version)
             if (isNotEmpty(libraryVersion)) {
                 println("----> Had to fallback to parent version for: ${uniqueId} -- result: ${libraryVersion}")
             } else if (parentPom != null) {
                 // fallback to parentPom if available
-                libraryVersion = fixString(parentPom.version)
+                libraryVersion = nullAsEmptyString(parentPom.version)
                 if (isNotEmpty(libraryVersion)) {
                     println("----> Had to fallback to version in parent pom for: ${uniqueId} -- result: ${libraryVersion}")
                 }
@@ -211,19 +211,19 @@ class AboutLibrariesProcessor {
             println("----> Failed to identify version for: ${uniqueId}")
         }
 
-        def libraryWebsite = fixString(artifactPom.url) // get the url to the library
-        def licenseId = resolveLicenseId(uniqueId, fixString(artifactPom.licenses.license.name), fixString(artifactPom.licenses.license.url))
+        def libraryWebsite = nullAsEmptyString(artifactPom.url) // get the url to the library
+        def licenseId = resolveLicenseId(uniqueId, nullAsEmptyString(artifactPom.licenses.license.name), nullAsEmptyString(artifactPom.licenses.license.url))
         if (!isNotEmpty(licenseId) && parentPom != null) { // fallback to parentPom if available
-            licenseId = resolveLicenseId(uniqueId, fixString(parentPom.licenses.license.name), fixString(parentPom.licenses.license.url))
+            licenseId = resolveLicenseId(uniqueId, nullAsEmptyString(parentPom.licenses.license.name), nullAsEmptyString(parentPom.licenses.license.url))
             if (isNotEmpty(licenseId)) {
                 println("----> Had to fallback to parent licenseId for: ${uniqueId} -- result: ${licenseId}")
             }
         }
         // get the url to the library
-        def repositoryLink = fixString(artifactPom.scm.url)
+        def repositoryLink = nullAsEmptyString(artifactPom.scm.url)
         def isOpenSource = isNotEmpty(repositoryLink)
         // assume if we have a link it is open source, may not always be accurate!
-        def libraryOwner = fixString(author)
+        def libraryOwner = nullAsEmptyString(author)
 
         // the license year
         def licenseYear = resolveLicenseYear(uniqueId, repositoryLink)
@@ -301,7 +301,7 @@ class AboutLibrariesProcessor {
      * Ensures no invalid chars stay in the identifier
      */
     static def fixIdentifier(Object value) {
-        return fixString(value).replace(".", "_").replace("-", "_")
+        return nullAsEmptyString(value).replace(".", "_").replace("-", "_")
     }
 
     /**
@@ -324,24 +324,8 @@ class AboutLibrariesProcessor {
     /**
      * Ensures all characters necessary are escaped
      */
-    static def fixString(Object value) {
-        def result = ""
-        if (value != null) {
-            final def source = value.toString()
-            result = source
-                    .replace("\\", "")
-                    .replace("\"", "\\\"")
-                    .replace("'", "\\'")
-                    .replace("&", "&amp;")
-                    .replace("<", "&lt;")
-                    .replace(">", "&gt;")
-
-            if( LOGGER.isDebugEnabled() && source != result ) {
-                LOGGER.debug("Fixed string from \n[{}]\n to \n[{}]", source, result)
-            }
-        }
-
-        return result
+    static def nullAsEmptyString(Object value) {
+        return null == value ? "" : value.toString()
     }
 
     /**
