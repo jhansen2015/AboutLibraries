@@ -147,88 +147,96 @@ class AboutLibrariesProcessor {
             }
         }
 
-        // generate a unique ID for the library
-        def author = fixAuthor(nullAsEmptyString(fixXmlSlurperArray(artifactPom.developers.developer.name)))
-        if (!isNotEmpty(author)) {
+        // get the author from the pom
+        def author = fixXmlSlurperArray(artifactPom.developers.developer.name)
+        if (isEmpty(author)) {
             // if no devs listed, use organisation
-            author = nullAsEmptyString(artifactPom.organization.name)
+            author = fixXmlSlurperArray(artifactPom.organization.name)
         }
-        if (!isNotEmpty(author) && parentPom != null) { // fallback to parentPom if available
-            author = fixAuthor(nullAsEmptyString(fixXmlSlurperArray(parentPom.developers.developer.name)))
-            if (!isNotEmpty(author)) {
+        if (isEmpty(author) && parentPom != null) { // fallback to parentPom if available
+            author = fixXmlSlurperArray(parentPom.developers.developer.name)
+            if (isEmpty(author)) {
                 // if no devs listed, use organisation
-                author = nullAsEmptyString(parentPom.organization.name)
+                author = fixXmlSlurperArray(parentPom.organization.name)
             }
-            if (isNotEmpty(author)) {
+            if (!isEmpty(author)) {
                 println("----> Had to fallback to parent author for: ${uniqueId} -- result: ${author}")
             }
         }
-        // get the author from the pom
-        def authorWebsite = nullAsEmptyString(fixXmlSlurperArray(artifactPom.developers.developer.organizationUrl))
-        if (!isNotEmpty(authorWebsite)) {
-            // if no devs listed, use organisation
-            authorWebsite = nullAsEmptyString(artifactPom.organization.url)
+        if(!isEmpty(author)) {
+            author = fixAuthor(author)
         }
-        if (!isNotEmpty(authorWebsite) && parentPom != null) { // fallback to parentPom if available
-            authorWebsite = fixAuthor(nullAsEmptyString(fixXmlSlurperArray(parentPom.developers.developer.organizationUrl)))
-            if (!isNotEmpty(authorWebsite)) {
+
+        // get the url for the author
+        def authorWebsite = fixXmlSlurperArray(artifactPom.developers.developer.organizationUrl)
+        if (isEmpty(authorWebsite)) {
+            // if no devs listed, use organisation
+            authorWebsite = fixXmlSlurperArray(artifactPom.organization.url)
+        }
+        if (isEmpty(authorWebsite) && parentPom != null) { // fallback to parentPom if available
+            authorWebsite = fixXmlSlurperArray(parentPom.developers.developer.organizationUrl)
+            if (isEmpty(authorWebsite)) {
                 // if no devs listed, use organisation
-                authorWebsite = nullAsEmptyString(parentPom.organization.url)
+                authorWebsite = fixXmlSlurperArray(parentPom.organization.url)
             }
-            if (isNotEmpty(authorWebsite)) {
+            if (!isEmpty(authorWebsite)) {
                 println("----> Had to fallback to parent authorWebsite for: ${uniqueId} -- result: ${authorWebsite}")
             }
         }
-        // get the url for the author
-        def libraryName = fixLibraryName(uniqueId, nullAsEmptyString(artifactPom.name))
+
         // get name of the library
-        def libraryDescription = fixLibraryDescription(uniqueId, nullAsEmptyString(artifactPom.description))
+        def libraryName = fixLibraryName(uniqueId, naes(artifactPom.name))
+
+        // get the description of the library
+        def libraryDescription = fixLibraryDescription(uniqueId, naes(artifactPom.description))
         if (enchantedDefinition != null) {
             // enchant the library by the description of the available definition file
             libraryDescription = ifEmptyElse(enchantedDefinition.string.find { it.@name.toString().endsWith("_libraryDescription") }.toString(), libraryDescription)
         }
-        if (!isNotEmpty(libraryDescription) && parentPom != null) {
+        if (isEmpty(libraryDescription) && parentPom != null) {
             // fallback to parentPom if available
             println("----> Had to fallback to parent description for: ${uniqueId}")
-            libraryDescription = fixLibraryDescription(uniqueId, nullAsEmptyString(parentPom.description))
+            libraryDescription = fixLibraryDescription(uniqueId, naes(parentPom.description))
         }
-        // get the description of the library
-        def libraryVersion = nullAsEmptyString(artifactPom.version) // get the version of the library
-        if (!isNotEmpty(libraryVersion)) {
+
+        def libraryVersion = naes(artifactPom.version) // get the version of the library
+        if (isEmpty(libraryVersion)) {
             // fallback to parent version if available
-            libraryVersion = nullAsEmptyString(artifactPom.parent.version)
-            if (isNotEmpty(libraryVersion)) {
+            libraryVersion = naes(artifactPom.parent.version)
+            if (!isEmpty(libraryVersion)) {
                 println("----> Had to fallback to parent version for: ${uniqueId} -- result: ${libraryVersion}")
             } else if (parentPom != null) {
                 // fallback to parentPom if available
-                libraryVersion = nullAsEmptyString(parentPom.version)
-                if (isNotEmpty(libraryVersion)) {
+                libraryVersion = naes(parentPom.version)
+                if (!isEmpty(libraryVersion)) {
                     println("----> Had to fallback to version in parent pom for: ${uniqueId} -- result: ${libraryVersion}")
                 }
             }
         }
-        if (!isNotEmpty(libraryVersion)) {
+        if (isEmpty(libraryVersion)) {
             println("----> Failed to identify version for: ${uniqueId}")
         }
 
-        def libraryWebsite = nullAsEmptyString(artifactPom.url) // get the url to the library
-        def licenseId = resolveLicenseId(uniqueId, nullAsEmptyString(artifactPom.licenses.license.name), nullAsEmptyString(artifactPom.licenses.license.url))
-        if (!isNotEmpty(licenseId) && parentPom != null) { // fallback to parentPom if available
-            licenseId = resolveLicenseId(uniqueId, nullAsEmptyString(parentPom.licenses.license.name), nullAsEmptyString(parentPom.licenses.license.url))
-            if (isNotEmpty(licenseId)) {
+        def libraryWebsite = naes(artifactPom.url) // get the url to the library
+
+        def licenseId = resolveLicenseId(uniqueId, naes(artifactPom.licenses.license.name), naes(artifactPom.licenses.license.url))
+        if (isEmpty(licenseId) && parentPom != null) { // fallback to parentPom if available
+            licenseId = resolveLicenseId(uniqueId, naes(parentPom.licenses.license.name), naes(parentPom.licenses.license.url))
+            if (!isEmpty(licenseId)) {
                 println("----> Had to fallback to parent licenseId for: ${uniqueId} -- result: ${licenseId}")
             }
         }
         // get the url to the library
-        def repositoryLink = nullAsEmptyString(artifactPom.scm.url)
-        def isOpenSource = isNotEmpty(repositoryLink)
+        def repositoryLink = naes(artifactPom.scm.url)
+        // TODO: This isn't a reliable way to determine open source...
+        def isOpenSource = !isEmpty(repositoryLink)
         // assume if we have a link it is open source, may not always be accurate!
-        def libraryOwner = nullAsEmptyString(author)
+        def libraryOwner = naes(author)
 
         // the license year
         def licenseYear = resolveLicenseYear(uniqueId, repositoryLink)
 
-        if (!isNotEmpty(libraryName)) {
+        if (isEmpty(libraryName)) {
             println "Could not get the name for ${uniqueId}, Skipping"
             return
         }
@@ -270,7 +278,7 @@ class AboutLibrariesProcessor {
 
         def library = new Library(
                 uniqueId,
-                "${groupId}:${artifactPom.artifactId}:${libraryVersion}",
+                dependency.id.componentIdentifier.displayName,
                 author,
                 authorWebsite,
                 libraryName,
@@ -290,7 +298,7 @@ class AboutLibrariesProcessor {
      * returns value1 if it is not empty otherwise value2
      */
     static def ifEmptyElse(def value1, def value2) {
-        if (value1 != null && isNotEmpty(value1.toString())) {
+        if (value1 != null && !isEmpty(value1.toString())) {
             return value1
         } else {
             return value2
@@ -301,7 +309,7 @@ class AboutLibrariesProcessor {
      * Ensures no invalid chars stay in the identifier
      */
     static def fixIdentifier(Object value) {
-        return nullAsEmptyString(value).replace(".", "_").replace("-", "_")
+        return naes(value).replace(".", "_").replace("-", "_")
     }
 
     /**
@@ -322,9 +330,9 @@ class AboutLibrariesProcessor {
     }
 
     /**
-     * Ensures all characters necessary are escaped
+     * Null-as-empty-String
      */
-    static def nullAsEmptyString(Object value) {
+    static def naes(Object value) {
         return null == value ? "" : value.toString()
     }
 
@@ -401,10 +409,10 @@ class AboutLibrariesProcessor {
 
     /**
      * Checks if the given string is empty.
-     * Returns true if it is NOT empty
+     * Returns true if it is null or empty
      */
-    static def isNotEmpty(String value) {
-        return value != null && value != ""
+    static def isEmpty(String value) {
+        return value == null || value == ""
     }
 
     /**
