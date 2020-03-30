@@ -7,8 +7,6 @@ import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.TaskAction
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
 
 @CacheableTask
 public class AboutLibrariesExportTask extends DefaultTask {
@@ -38,13 +36,13 @@ public class AboutLibrariesExportTask extends DefaultTask {
             } catch (Exception ex) {
                 if (library.licenseId != null && library.licenseId != "") {
                     HashSet<String> libsWithMissing = unknownLicenses.getOrDefault(library.licenseId, new HashSet<String>())
-                    libsWithMissing.add(library.artifactId)
+                    libsWithMissing.add(library.libraryArtifactId)
                     unknownLicenses.put(library.licenseId, libsWithMissing)
                 } else {
-                    librariesWithoutLicenses.add(library.artifactId)
+                    librariesWithoutLicenses.add(library.libraryArtifactId)
                 }
             }
-            println "${library.libraryName};${library.artifactId};${library.licenseId}"
+            println "${library.libraryName};${library.libraryArtifactId};${library.licenseId}"
         }
 
         println ""

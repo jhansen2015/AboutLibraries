@@ -5,7 +5,7 @@ package com.mikepenz.aboutlibraries.plugin.mapping
  */
 data class Library(
         val uniqueId: String,
-        val artifactId: String,
+        val libraryArtifactId: String,
         val author: String?,
         val authorWebsite: String?,
         val libraryName: String?,
@@ -15,6 +15,8 @@ data class Library(
         val licenseId: String?,
         val isOpenSource: Boolean,
         val repositoryLink: String?,
-        val libraryOwner: String?,
-        val licenseYear: String?
+        /** libraryOwner */
+        val owner: String?,
+        /** licenseYear */
+        val year: String?
 )
