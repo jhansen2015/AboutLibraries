@@ -1,0 +1,65 @@
+{
+  "format": "1.0",
+  "artifacts": [
+    {
+      "artifact": "matched_using_startsWith_or_regex",
+      "license": "Apache_2_0",
+      "licenseYear": "The Year",
+      "name": "The Name",
+      "description": "The Description. \"artifact\" is a pattern for matching artifacts using <code>componentId.startsWith(pattern) || component ==~ pattern</code> (a regex match).",
+      "website": "https://...",
+      "repoLink": "https://...",
+      "author": "The Author",
+      "authorWebsite": "https://...",
+      "owner ": "The Owner"
+    },
+    {
+      "artifact": "groupid:",
+      "description": "This match sets \"owner\" to \"The Owner\" for all artifacts starting with \"groupid:\"",
+      "owner ": "The Owner"
+    },
+    {
+      "artifact": "groupid:artifactid1:",
+      "description": "This match sets \"name\" to \"Artifact 1\" for all artifacts starting with \"groupid:artifactid1:\". The \"owner\" will still be \"The Owner\" from the previous \"groupid:\" artifact pattern.",
+      "name": "Artifact 1"
+    },
+    {
+      "artifact": "groupid:artifactid2:",
+      "description": "This match sets \"name\" to \"Artifact 2\" for all artifacts starting with \"groupid:artifactid2:\". The \"owner\" will still be \"The Owner\" from the previous \"groupid:\" artifact pattern.",
+      "name": "Artifact 2"
+    },
+    {
+      "artifact": "com.mikepenz:aboutlibraries-core:",
+      "name": "AboutLibraries Core"
+    },
+    {
+      "artifact": "com.mikepenz:aboutlibraries:",
+      "name": "AboutLibraries UI"
+    },
+    {
+      "artifact": "com.fasterxml.jackson.core:jackson-",
+      "license": "Apache_2_0",
+      "owner": "FasterXML"
+    },
+    {
+      "artifact": "com.fasterxml.jackson.core:jackson-annotations:",
+      "name": "Jackson Annotations"
+    },
+    {
+      "artifact": "com.fasterxml.jackson.core:jackson-core:",
+      "name": "Jackson Core"
+    },
+    {
+      "artifact": "com.fasterxml.jackson.core:jackson-databind:",
+      "name": "Jackson Databind"
+    },
+    {
+      "artifact": "io.noties.markwon:core:",
+      "name": "Markwon Core"
+    },
+    {
+      "artifact": "com.atlassian.commonmark:commonmark:",
+      "name": "CommonMark Java Core"
+    }
+  ]
+}
