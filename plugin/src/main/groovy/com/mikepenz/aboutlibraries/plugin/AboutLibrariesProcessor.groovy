@@ -2,7 +2,11 @@ package com.mikepenz.aboutlibraries.plugin
 
 import com.mikepenz.aboutlibraries.plugin.mapping.Library
 import com.mikepenz.aboutlibraries.plugin.mapping.License
+import groovy.json.JsonGenerator
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
 import groovy.xml.XmlUtil
+import net.upbear.groovy.DetectingMetaClass
 import org.gradle.api.artifacts.ResolvedArtifact
 import org.gradle.api.artifacts.component.ComponentIdentifier
 import org.gradle.api.artifacts.result.ArtifactResolutionResult
@@ -20,35 +24,62 @@ class AboutLibrariesProcessor {
     private static final Logger LOGGER = LoggerFactory.getLogger(AboutLibrariesProcessor.class)
 
     private File configFolder
-
-    Set<String> handledLibraries = new HashSet<String>()
+    private ProcessorConfig config = new ProcessorConfig()
+    private final usedConfigs = []
+    private Set<String> handledLibraries = new HashSet<String>()
 
     Map<String, String> customLicenseMappings = new HashMap<String, String>()
     Map<String, String> customLicenseYearMappings = new HashMap<String, String>()
     Map<String, String> customNameMappings = new HashMap<String, String>()
     Map<String, String> customEnchantMapping = new HashMap<String, String>()
 
-    def collectMappingDetails(targetMap, resourceName) {
-        def customMappingText = getClass().getResource("/static/${resourceName}").getText('UTF-8')
-        customMappingText.eachLine {
-            def splitMapping = it.split(':')
-            targetMap.put(splitMapping[0], splitMapping[1])
+    def getConfigFile(final resourceName) {
+        final configFile = new File(configFolder, "${resourceName}")
+        if( ! configFile.exists() ) {
+            return null
         }
 
-        if (configFolder != null) {
-            try {
-                def target = new File(configFolder, "${resourceName}")
-                if (target.exists()) {
-                    customMappingText = target.getText('UTF-8')
-                    customMappingText.eachLine {
-                        def splitMapping = it.split(':')
-                        targetMap.put(splitMapping[0], splitMapping[1])
-                    }
-                    println "Read custom mapping file from: ${target.absolutePath}"
-                }
-            } catch (Exception ex) {
-                // ignored
+        return configFile
+    }
+
+    private static def readConfigFile(final configFile) {
+        try {
+            if( null == configFile ) {
+                return null
             }
+
+            final contents = configFile.getText('UTF-8')
+            LOGGER.debug("Read config file [{}] as contents=[{}]", configFile.absolutePath, contents)
+            return contents
+        }
+        catch(Exception e) {
+            throw new IllegalArgumentException("Failure while reading configFile=[${configFile.absolutePath}]", e)
+        }
+    }
+
+    private static def parseMappingsFile(final targetMap, final contents) {
+        if( null == contents ) {
+            return
+        }
+
+        // Use Properties, since the contents and '.props' ext look like a properties
+        // file, and doing so provides support for comments and escaping support
+        final properties = new Properties()
+        properties.load(new ByteArrayInputStream(contents.getBytes("UTF8")))
+        properties.keySet().forEach { key ->
+            targetMap.put(key, properties.get(key))
+        }
+    }
+
+    def collectMappingDetails(final targetMap, final resourceName) {
+        final customMappingText = getClass().getResource("/static/${resourceName}").getText('UTF-8')
+        parseMappingsFile(targetMap, customMappingText)
+
+        final configFile = getConfigFile(resourceName)
+        parseMappingsFile(targetMap, readConfigFile(configFile))
+
+        if( null != configFile ) {
+            println "Read custom mapping from file: ${configFile.absolutePath}"
         }
     }
 
@@ -59,14 +90,119 @@ class AboutLibrariesProcessor {
         collectMappingDetails(customEnchantMapping, 'custom_enchant_mapping.prop')
     }
 
+//    private static class LicenseConfig {
+//        List<String> names = []
+//        // TODO: Implement support for this
+//        String file
+//        String abbr
+//    }
+
+    private static class ArtifactConfig {
+        def artifact
+        String license
+        String licenseYear
+        String name
+        String description
+        String website
+        String repoLink
+        String author
+        String authorWebsite
+        String owner
+    }
+
+    private static final artifactRequireAtLeastOneOfFields = DetectingMetaClass.detectFieldNamesFromType(ArtifactConfig) {
+        it.license
+        it.licenseYear
+        it.name
+        it.description
+        it.website
+        it.repoLink
+        it.author
+        it.authorWebsite
+        it.owner
+    }
+
+    private static final artifactArrayOptionalFields = DetectingMetaClass.detectFieldNamesFromType(ArtifactConfig) {
+        it.artifact
+        it.author
+        it.owner
+    }
+
+    private static final class ProcessorConfig {
+        String format
+//        List<LicenseConfig> licenses = []
+        List<ArtifactConfig> artifacts = []
+    }
+
+    /**
+     * Convert single strings to an array; makes it easy to have optional single value or Array
+     *
+     * @param value
+     * @return If value is not a List, wraps it in a List. empty list if value == null.
+     */
+    private static def coerceToList(final value) {
+        return null == value ? [] : value instanceof List ? value : [value]
+    }
+
+    def parseConfig() {
+
+        final configFile = getConfigFile("config.json")
+        final contents = readConfigFile(configFile)
+        if (null == contents) {
+            return new ProcessorConfig()
+        }
+
+        try {
+            final jsonSlurper = new JsonSlurper()
+            def hasErrors = false
+            final config = jsonSlurper.parseText(contents) as ProcessorConfig
+            for( def artifact : config.artifacts ) {
+                if( !artifact.artifact ) {
+                    println "\"artifact\" required in [${artifact}]"
+                    hasErrors = true
+                }
+                // Empty string is acceptable, but not null.
+                def isValid = false
+                artifactRequireAtLeastOneOfFields.forEach { isValid = artifact[it] ?: isValid }
+                if( !isValid ) {
+                    println """\
+Config artifact ${artifact} requires as least one of:
+  * ${artifactRequireAtLeastOneOfFields.join('\n  * ')}
+"""
+                    hasErrors = true
+                }
+                artifactArrayOptionalFields.forEach { artifact[it] = coerceToList(artifact[it]) }
+            }
+            if( hasErrors ) {
+                throw new IllegalArgumentException("Processor configuration has errors.")
+            }
+
+            if( LOGGER.isDebugEnabled() ) {
+                final generator = new JsonGenerator.Options().build()
+                final pretty = JsonOutput.prettyPrint(generator.toJson(config))
+                LOGGER.debug("processor config=[}]", pretty)
+            }
+
+            println "Read processor config from ${configFile.absolutePath}"
+
+            return config
+        } catch (IllegalArgumentException e) {
+            throw e
+        } catch (Exception e) {
+            throw new Exception("Parse failure on resource [${configFile.absolutePath}], contents=[${contents}]", e)
+        }
+
+    }
+
     def gatherDependencies(def project, configuration) {
         def extension = project.extensions.aboutLibraries
         if (extension.configPath != null) {
             configFolder = new File(extension.configPath)
         }
+        config = parseConfig()
 
         // get all dependencies
-        Set<ResolvedArtifact> collectedDependencies = new DependencyCollector().collect(configuration)
+        final Set<ResolvedArtifact> collectedDependencies = new DependencyCollector().collect(configuration)
 
         println "All dependencies.size=${collectedDependencies.size()}"
         if (collectedDependencies.size() > 0) {
@@ -84,6 +220,13 @@ class AboutLibrariesProcessor {
             }
             else {
                 LOGGER.warn("Failed to construct library record for {}", dependency)
+            }
+        }
+        
+        // Check for unused configs
+        config.artifacts.forEach {
+            if( ! usedConfigs.contains(it) ) {
+                LOGGER.debug("Unused config artifact ${it}")
             }
         }
         return librariesList
@@ -235,6 +378,43 @@ class AboutLibrariesProcessor {
 
         // the license year
         def licenseYear = resolveLicenseYear(uniqueId, repositoryLink)
+
+        // Do this last, since we don't know what the override will be.
+        def componentId = dependency.id.componentIdentifier.displayName
+        config.artifacts.forEach { a ->
+            a.artifact.forEach { artifactPattern ->
+                LOGGER.debug(
+                        "Evaluating componentId=[{}] against [{}]",
+                        componentId,
+                        artifactPattern
+                )
+                if(componentId.startsWith(artifactPattern) || componentId ==~ artifactPattern) {
+                    usedConfigs.add(a)
+                    LOGGER.debug("====> Matched as startsWith or ==~ {}", a)
+                    // if an override is provided, use it
+                    libraryName = a.name ?: libraryName
+                    licenseId = a.license ?: licenseId
+                    licenseYear = a.licenseYear ?: licenseYear
+                    libraryDescription = a.description ?: libraryDescription
+                    libraryWebsite = a.website ?: libraryWebsite
+                    repositoryLink = a.repoLink ?: repositoryLink
+                    author = a.author ? a.owner.join(', ') : author
+                    authorWebsite = a.authorWebsite ?: authorWebsite
+                    libraryOwner = a.owner ? a.owner.join(', ') : libraryOwner
+                }
+            }
+        }
+
+//        if (!isEmpty(licenseId)) {
+//            for (final LicenseConfig l : config.licenses) {
+//                println "Evaluating licenseId=[${licenseId}] against names=${l.names}"
+//                if (l.names.contains(licenseId)) {
+//                    usedConfigs.add(l)
+//                    println "Found match"
+//                    if( l.abbr ) { licenseId = l.abbr }
+//                }
+//            }
+//        }
 
         if (isEmpty(libraryName)) {
             println "Could not get the name for ${uniqueId}, Skipping"

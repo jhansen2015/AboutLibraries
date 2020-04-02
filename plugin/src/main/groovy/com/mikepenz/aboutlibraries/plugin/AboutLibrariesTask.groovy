@@ -4,6 +4,7 @@ package com.mikepenz.aboutlibraries.plugin
 import com.mikepenz.aboutlibraries.plugin.mapping.Library
 import com.mikepenz.aboutlibraries.plugin.mapping.License
 import groovy.xml.MarkupBuilder
+import net.upbear.groovy.DetectingMetaClass
 import org.gradle.api.DefaultTask
 import org.gradle.api.artifacts.Configuration
 import org.gradle.api.tasks.*
@@ -161,9 +162,9 @@ class AboutLibrariesTask extends DefaultTask {
      * Writes out the given library to disk
      */
     static def writeDependency(MarkupBuilder resources, Library library) {
-        if( library.uniqueId == "com.mikepenz:aboutlibraries") {
-            return
-        }
+//        if( library.uniqueId == "com.mikepenz:aboutlibraries") {
+//            return
+//        }
 
         def delimiter = ""
         def customProperties = ""
@@ -178,13 +179,13 @@ class AboutLibrariesTask extends DefaultTask {
         resources.string name: "define_plu_${library.uniqueId}", translatable: 'false', "${customProperties}"
 
         if( 0 == cdataFields.size() ) {
-            cdataFields.addAll(detectFieldNames(library) {
+            cdataFields.addAll(DetectingMetaClass.detectFieldNamesFromInstance(library) {
                 library.libraryDescription
             })
         }
         // Explicit order needed by AboutLibraries activity
         if( 0 == includeFields.size() ) {
-            includeFields.addAll(detectFieldNames(library) {
+            includeFields.addAll(DetectingMetaClass.detectFieldNamesFromInstance(library) {
                 library.author
                 library.authorWebsite
                 library.libraryName
@@ -218,68 +219,22 @@ class AboutLibrariesTask extends DefaultTask {
                 }
             }
         }
-        
+
     }
 
-    static class DetectingMetaClass extends DelegatingMetaClass {
 
-        final def fields = []
-
-        DetectingMetaClass(MetaClass metaClass) { super(metaClass) }
-
-        @Override
-        synchronized Object getProperty(Object object, String propertyName) {
-            println("Detecting 3 property name ${propertyName}")
-            fields.add(propertyName)
-            return super.getProperty(object, propertyName)
-        }
-    }
-
-    /**
-     * <p>Detects field names by overriding the metaClass property method for object, then
-     * executing propNameReferenceClosure, which should contain a sequence of object.prop1,
-     * object.prop2, etc. references.</p>
-     *
-     * @param object Object that will be referenced in the closure. Don't use an object that
-     * @param propNameReferenceClosure This MUST reference properties on object (the same instance)
-     * @return List of properties referenced in the closure.
-     */
-    static def detectFieldNames(final object, final propNameReferenceClosure) {
-        // Synchronized on the object to prevent bleeding property references from
-        // other threads.
-        synchronized (object) {
-            final def originalMetaClass = object.metaClass
-            final def detectingMeta = new DetectingMetaClass(object.metaClass)
-            object.metaClass = detectingMeta
-
-            propNameReferenceClosure()
-
-            // Restore the original implementation
-            object.metaClass = originalMetaClass
-            return detectingMeta.fields
-        }
-    }
-
-//    // Mechanism to detect the field names by referencing the properties,
-//    // which allows explicity listing of property names while preserving
-//    // the refactorability.
-//    static def detectFieldNames(propNameReferenceClosure) {
-//        def fields = []
-//        Library.metaClass.getProperty = {
-//            synchronized (fields) {
-//                if( ! fields.contains(it) ) {
-//                    fields.add(it)
-//                }
-//            }
-//            Library.metaClass.getMetaProperty(it).getProperty(delegate)
+//    public class DetectingMetaClass.groovy extends DelegatingMetaClass {
+//
+//        final def fields = []
+//
+//        public DetectingMetaClass.groovy(MetaClass metaClass) { super(metaClass) }
+//
+//        @Override
+//        synchronized Object getProperty(Object object, String propertyName) {
+//            LOGGER.debug("Detecting property name ${propertyName}")
+//            fields.add(propertyName)
+//            return super.getProperty(object, propertyName)
 //        }
-//        propNameReferenceClosure()
-//        // Restore the original implementation
-//        println("Restoring original method...")
-//        Library.metaClass.getProperty = {
-//            Library.metaClass.getMetaProperty(it).getProperty(delegate)
-//        }
-//        return fields
 //    }
 
     /**
